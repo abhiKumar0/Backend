@@ -1,14 +1,19 @@
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 import dbConnect from "./db/index.js";
 import express from "express";
 
-dotenv.config({path: "./.env"});
+//configuring .env variables
+dotenv.config({ path: "./.env" });
 
 const app = express();
 
 //if connected to MongoDB successfully then start the server or else deal with errors
-dbConnect().then(() => {
-  app.listen(process.env.PORT, () => console.log('listening on port ' + process.env.PORT))
-}).catch((err) => {
-  console.log("Error: " + err);
-});
+dbConnect()
+  .then(() => {
+    app.listen(process.env.PORT || 8000, () =>
+      console.log("listening on port " + process.env.PORT)
+    );
+  })
+  .catch((err) => {
+    console.log("SERVER CONNECTION FAILED: " + err);
+  });
