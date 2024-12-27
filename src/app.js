@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
+
 const app = express();
 
 //initializing cors 
@@ -17,7 +18,20 @@ app.use(express.json({limit: "16kb"}));
 app.use(express.urlencoded({extended: true}));
 
 // serve static files from the "public" folder
-app.use(express.static(path.join(__dirname || "public")));
+app.use(express.static( "public"));
 
 
 app.use(cookieParser());
+
+
+//Routes import
+import userRouter from "./routes/user.routes.js";
+
+
+
+app.use("/api/v1/users", userRouter);
+
+
+
+
+export { app }
