@@ -61,7 +61,7 @@ UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 }
 
-UserSchema.methods.generateAcessToken = async function() {
+UserSchema.methods.generateAccessToken = async function() {
   return jwt.sign({
     _id: this._id,
     email:this.email,
