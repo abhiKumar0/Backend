@@ -3,6 +3,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { OPTIONS } from "../constants.js";
+import jwt, { decode } from "jsonwebtoken"
 
 const generateAccessTokenAndRefreshToken = async (userId) => {
   try {
@@ -28,26 +30,31 @@ const registerUser = AsyncHandler(async (req, res) => {
   //Retrieving data from req.body
   const { fullName, email, username, password } = req.body;
 
+
   //Validation of input
   if (
-    [fullName, email, username, password].some((field) => field.trim === "")
+    [fullName, email, username, password].some((field) => field?.trim === "")
   ) {
     throw new ApiError(400, "All fields are required");
   }
 
   //Check if the user already exist
-  const existedUser = User.find({
+  const existedUser = await User.findOne({
     //Operator to check if any exist for multiple unique ids
     $or: [{ username }, { email }],
   });
+
 
   if (existedUser) {
     throw new ApiError(409, "User with email or username already exists");
   }
 
   //Managing file or Retrieving file path from multer
-  const avatarPath = req.files?.avatar[0].path;
-  const coverImagePath = req.files?.coverImage[0].path;
+  const avatarPath = req.files?.avatar[0]?.path;
+  let coverImagePath;
+  if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length>0) {
+    coverImagePath = req.files?.coverImage[0].path;
+  }
 
   //Validation
   if (!avatarPath) {
@@ -55,11 +62,15 @@ const registerUser = AsyncHandler(async (req, res) => {
   }
 
   //Uploading to cloudinary
+  console.log("Avatar", avatarPath)
   const avatar = await uploadOnCloudinary(avatarPath);
+  console.log("Avatar af6yer", avatar)
+  
   const coverImage = await uploadOnCloudinary(coverImagePath);
 
+
   if (!avatar) {
-    throw new ApiError(400, "Avatar to upload image");
+    throw new ApiError(400, "Avatar file is required");
   }
 
   //Creating user
@@ -123,15 +134,11 @@ const loginUser = AsyncHandler(async (req, res) => {
     "-password -refreshToken"
   );
 
-  const options = {
-    httpOnly: true,
-    secure: true,
-  };
 
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, OPTIONS)
+    .cookie("refreshToken", refreshToken, OPTIONS)
     .json(
       new ApiResponse(
         200,
@@ -159,15 +166,51 @@ const logoutUser = AsyncHandler( async (req, res) => {
   )
 
 
-  const options = {
-    httpOnly: true,
-    secure: true
-  }
-
   return res.status(200)
-  .clearCookie("accessToken", accessToken)
-  .clearCookie("refreshToken", refreshToken)
+  .clearCookie("accessToken", accessToken, OPTIONS)
+  .clearCookie("refreshToken", refreshToken, OPTIONS)
   .json(new ApiResponse(200, {}, "User logged out"))
 })
+
+const refreshAccessToken = AsyncHandler(async (req, res) => {
+  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "Unauthorize request");
+  }
+
+  try {
+    const decodedToken = await jwt.verify(incomingRefreshToken, process.env.REFRESH_SECRET_KEY);
+
+    const user = await User.findById(decodedToken?._id);
+
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token")
+    }
+
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or used");
+    }
+
+    const {accessToken, refreshToken} =  await generateAccessTokenAndRefreshToken(user._id);
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, OPTIONS)
+      .cookie("refreshToken", refreshToken, OPTIONS)
+      .json(
+        new ApiResponse(
+          200,
+          {accessToken, refreshToken},
+          "Access token refreshed"
+        )
+      )
+  } catch (error) {
+    throw new ApiError(401, error?.message || "Unauthorize request")
+  }
+
+
+})
+
 
 export { registerUser, loginUser , logoutUser};
